@@ -3,14 +3,9 @@
 require 'optparse'
 require 'json'
 
-# 1. parse command line args and store in options. Method parse_args
-# 2. Identify JSON file to search based on the -e entity_type (users.json or projects.json) Method identify_json
-# 3. parse json and return a hash
-# 4. return the matching obj by parsing over the hash objects
-# 5. format results. Convert the matching obj to a string for output
-# 6. output result. Format the output and display the formatted result
-
 class SearchData
+  # Parse_args will parse the command line options and save them in a hash
+  # Returns the options hash
   def parse_args(args)
 	options = {}
 
@@ -34,6 +29,9 @@ class SearchData
     options
   end
 
+
+  # Identify_json will identify the JSON file to be used for searching
+  # based on the entity_type passed to the function
   def identify_json(entity_type)
     if (entity_type == "user")
 	  filename = "users.json"
@@ -45,6 +43,8 @@ class SearchData
     filename
   end
 
+
+  # Parse_json will read the given JSON file into a hash and return it
   def parse_json(filename)
 	file = File.read(filename)
 	begin
@@ -53,53 +53,80 @@ class SearchData
 		file = nil
 	end
 	data_hash
-	#returns hash
   end
 
-  def find_match(data_hash, key_name, search_str)
-	matching_obj = data_hash.find {|obj| obj[key_name] == search_str}
+
+  # find_match will compare and check if the search string is in the given |key, value| pair
+  # and return true or false
+  def find_match(key, value, key_str, search_str)
+  	if value.kind_of?(Array)
+  		value.each do |element_value|
+  			#puts "key: " + key + ", element_value: " + element_value
+  			if (find_match(key, element_value, key_str, search_str))
+  				return true
+  			end
+  		end
+	elsif value.kind_of?(Hash)
+		value.each do |element_key, element_value|
+			if (find_match(element_key, element_value, key_str, search_str))
+				return true
+			end
+		end
+	else
+		if (key == key_str && value.to_s == search_str)
+			return true
+		end
+	end
+	return false
   end
 
+  # find_match_in_file will read through the file hash and search for the required search string
+  # in each key, value pair
+  # If it finds a match it returns the associated object
+  def find_match_in_file(data_hash, key_str, search_str)
+  	matching_obj = {}
+  	data_hash.each do |key, value|
+  		key.each do |innerkey, innervalue|
+			if (find_match(innerkey, innervalue, key_str, search_str))
+				return key
+			end
+
+  		end
+	end
+	nil
+  end
+
+  # format_result will convert and return the given object into a Human Readable String format
   def format_result(obj)
     formatted_str = "\n\nSearch Results: \n\n"
     obj.each do |key, value|
       unless key == "_id"
 	    key_str = key.capitalize
 	    if value.kind_of?(Array)
-		  formatted_str << key_str << ": "
-		  value.each do |var|
-		    if var == value.last
-			  formatted_str << var
-		    else
-			  formatted_str << var << ","
-		    end
-		  end
-	    formatted_str << "\n"
+		  	formatted_str << key_str << ": "
+		 	value.each do |var|
+		  		formatted_str << var.to_s << ((var == value.last) ? "" : ",")
+		  	end
+		  	formatted_str << "\n"
 	    elsif value.is_a?(Hash)
 		  formatted_str << key_str << ": " << "\n"
 		  value.each do |var_key, var_value|
 		    formatted_str << "\t" << var_key << ":" << var_value << "\n"
 		  end
 	    else
-		  value_str = ""
-		  if value.is_a?(Integer)
-		    value_str = value.to_s
-		  elsif !!value == value
-		    value_str = value ? "true" : "false"
-		  else
-		    value_str = value
-		  end
-		  formatted_str << key_str << ": " << value_str << "\n"
+		  formatted_str << key_str << ": " << value.to_s << "\n"
 	    end
 	  end
     end
     formatted_str
   end
 
+  # Prints the given string to console
   def print_result(formatted_result)
-    puts formatted_result
+   puts formatted_result
   end
 
+  #Entry point of the program
   def search_data(args)
     options = parse_args(args)
     if (options)
@@ -113,7 +140,7 @@ class SearchData
 	    puts "Failed to parse JSON file: '" + filename + "'"
 	    exit 1
 	  end
-	  matching_obj = find_match(data_hash, options[:key], options[:search_term])
+	  matching_obj = find_match_in_file(data_hash, options[:key], options[:search_term])
 	  if (!matching_obj)
 	    puts "No match found."
 	    exit 0
